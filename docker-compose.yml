@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  ffmpeg:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all # Adjust this if you want to specify which GPUs to use
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    volumes:
+      - ./data:/data # Adjust the path as needed to store input/output files
+    command: ["-version"] # Example command to test ffmpeg; replace with your own
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx:/etc/nginx/conf.d # Include your NGINX configuration files
+      - ./certs:/etc/letsencrypt # Include Let's Encrypt certificates
+      - ./nginx:/var/www/certbot # Webroot for certbot challenges
+    ports:
+      - "80:80" # HTTP for Certbot validation
+      - "443:443" # HTTPS for secure connections
+    depends_on:
+      - certbot
+      - oauth2-proxy
+    environment:
+      - NGINX_HOST=yourdomain.com # Replace with your domain
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certs:/etc/letsencrypt # Store SSL certificates
+      - ./nginx:/var/www/certbot # Webroot path for validation
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot certonly --webroot -w /var/www/certbot -d yourdomain.com --email youremail@example.com --rsa-key-size 2048 --agree-tos --noninteractive --keep-until-expiring; sleep 12h; done'"
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    volumes:
+      - ./oauth2_proxy.cfg:/etc/oauth2_proxy.cfg # Config file for oauth2-proxy
+    environment:
+      - OAUTH2
